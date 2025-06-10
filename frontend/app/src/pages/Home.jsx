@@ -1,10 +1,11 @@
 import React from 'react'
 import Movie from '../components/Movie'
+import Popular from '../components/Popular'
 
 function Home() {
   return (
     <>
-    <Movie/>
+    <Popular/>
     </>
   )
 }
