@@ -2,11 +2,6 @@
 """Django's command-line utility for administrative tasks."""
 import os
 import sys
-import multiprocessing
-
-if __name__ == "__main__":
-    multiprocessing.set_start_method("spawn")
-    # start your app / celery here
 
 
 def main():
