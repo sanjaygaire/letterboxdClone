@@ -1,99 +1,53 @@
-# user/views.py
-
 from rest_framework.views import APIView
 from rest_framework.response import Response
 from rest_framework import status
-from rest_framework.permissions import IsAuthenticated, AllowAny
-from rest_framework_simplejwt.tokens import RefreshToken
-from django.contrib.auth import authenticate
+from .serializers import LogoutSerializer, RegisterSerializer, VerifyEmailSerializer
+from django.core.mail import send_mail
+import random
+from .models import EmailVerification, User
 
-from .models import CustomUser, Movie, Review, LikeDislike, Comment, Watchlist, Watched
-from .serializers import UserSerializer, ReviewSerializer
-
+class LogoutView(APIView):
+    def post(self, request):
+        serializer = LogoutSerializer(data=request.data)
+        serializer.is_valid(raise_exception=True)
+        serializer.save()
+        return Response({"detail": "Successfully logged out"}, status=status.HTTP_200_OK)
 
 class RegisterView(APIView):
-    permission_classes = [AllowAny]
-
     def post(self, request):
-        serializer = UserSerializer(data=request.data)
-        if serializer.is_valid():
-            serializer.save()
-            return Response(serializer.data, status=status.HTTP_201_CREATED)
-        return Response(serializer.errors, status=status.HTTP_400_BAD_REQUEST)
+        serializer = RegisterSerializer(data=request.data)
+        serializer.is_valid(raise_exception=True)
+        user = serializer.save()
 
+        otp = str(random.randint(100000, 999999))
+        EmailVerification.objects.create(user=user, otp=otp)
 
-class LoginView(APIView):
-    permission_classes = [AllowAny]
-
-    def post(self, request):
-        username = request.data.get('username')
-        password = request.data.get('password')
-
-        user = authenticate(username=username, password=password)
-
-        if user is None:
-            return Response({'error': 'Invalid credentials'}, status=status.HTTP_401_UNAUTHORIZED)
-
-        refresh = RefreshToken.for_user(user)
-        return Response({
-            'refresh': str(refresh),
-            'access': str(refresh.access_token),
-            'user': UserSerializer(user).data
-        })
-
-
-class AddToWatchlist(APIView):
-    permission_classes = [IsAuthenticated]
-
-    def post(self, request):
-        user = request.user
-        movie_id = request.data.get('movie_id')
-
-        try:
-            movie = Movie.objects.get(id=movie_id)
-        except Movie.DoesNotExist:
-            return Response({"error": "Movie not found"}, status=status.HTTP_404_NOT_FOUND)
-
-        Watchlist.objects.get_or_create(user=user, movie=movie)
-        return Response(status=status.HTTP_201_CREATED)
-
-
-class MarkAsWatched(APIView):
-    permission_classes = [IsAuthenticated]
-
-    def post(self, request):
-        user = request.user
-        movie_id = request.data.get('movie_id')
-
-        try:
-            movie = Movie.objects.get(id=movie_id)
-        except Movie.DoesNotExist:
-            return Response({"error": "Movie not found"}, status=status.HTTP_404_NOT_FOUND)
-
-        Watched.objects.get_or_create(user=user, movie=movie)
-        return Response(status=status.HTTP_201_CREATED)
-
-
-class CreateReview(APIView):
-    permission_classes = [IsAuthenticated]
-
-    def post(self, request):
-        user = request.user
-        movie_id = request.data.get('movie_id')
-        content = request.data.get('content')
-        rating = request.data.get('rating')
-        public = request.data.get('public', False)
-
-        try:
-            movie = Movie.objects.get(id=movie_id)
-        except Movie.DoesNotExist:
-            return Response({"error": "Movie not found"}, status=status.HTTP_404_NOT_FOUND)
-
-        review = Review.objects.create(
-            user=user,
-            movie=movie,
-            content=content,
-            rating=rating,
-            public=public
+        send_mail(
+            'Verify Your Email',
+            f'Your OTP is {otp}',
+            'noreply@example.com',
+            [user.email],
+            fail_silently=False,
         )
-        return Response(ReviewSerializer(review).data, status=status.HTTP_201_CREATED)
+
+        return Response({"detail": "Registration successful. Check email for OTP."}, status=status.HTTP_201_CREATED)
+
+class VerifyEmailView(APIView):
+    def post(self, request):
+        serializer = VerifyEmailSerializer(data=request.data)
+        serializer.is_valid(raise_exception=True)
+
+        email = serializer.validated_data['email']
+        otp = serializer.validated_data['otp']
+
+        try:
+            user = User.objects.get(email=email)
+            verification = EmailVerification.objects.get(user=user, otp=otp)
+            if not verification.is_verified:
+                verification.is_verified = True
+                verification.save()
+                return Response({"detail": "Email verified successfully!"})
+            else:
+                return Response({"detail": "Already verified"}, status=status.HTTP_400_BAD_REQUEST)
+        except Exception:
+            return Response({"detail": "Invalid OTP or email"}, status=status.HTTP_400_BAD_REQUEST)

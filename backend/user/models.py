@@ -1,70 +1,31 @@
 from django.db import models
 from django.contrib.auth.models import AbstractUser
-from django.utils import timezone
+from django.core.mail import send_mail
+import random
 
-class CustomUser(AbstractUser):
-    name = models.CharField(max_length=100)
-    username = models.CharField(max_length=50, unique=True)
+class User(AbstractUser):
+    email = models.EmailField(unique=True)
 
-    USERNAME_FIELD = 'username'
-    REQUIRED_FIELDS = ['name']
-
-    def __str__(self):
-        return self.username
-
-
-class Movie(models.Model):
-    title = models.CharField(max_length=200)
-    tmdb_id = models.IntegerField(unique=True)
+class Profile(models.Model):
+    user = models.OneToOneField(User, on_delete=models.CASCADE)
+    bio = models.TextField(blank=True)
+    avatar = models.ImageField(upload_to='avatars/', blank=True, null=True)
+    fav_movies = models.ManyToManyField('movie.Movie', related_name='favored_by', blank=True)
+    reviewed_movies = models.ManyToManyField('movie.Movie', related_name='reviewed_by_profiles', blank=True)
+    watchlisted_movies = models.ManyToManyField('movie.Movie', related_name='watchlisted_by_profiles', blank=True)
 
     def __str__(self):
-        return self.title
+        return self.user.username
 
+class BlacklistedToken(models.Model):
+    token = models.TextField()
+    blacklisted_at = models.DateTimeField(auto_now_add=True)
 
-class Review(models.Model):
-    user = models.ForeignKey(CustomUser, on_delete=models.CASCADE)
-    movie = models.ForeignKey(Movie, on_delete=models.CASCADE)
-    content = models.TextField()
-    rating = models.PositiveSmallIntegerField()  # 1 to 10
-    public = models.BooleanField(default=False)
+    def __str__(self):
+        return self.token[:20] + "..."
+
+class EmailVerification(models.Model):
+    user = models.ForeignKey(User, on_delete=models.CASCADE)
+    otp = models.CharField(max_length=6)
     created_at = models.DateTimeField(auto_now_add=True)
-
-    def __str__(self):
-        return f"{self.user.username} - {self.movie.title}"
-
-
-class LikeDislike(models.Model):
-    review = models.ForeignKey(Review, on_delete=models.CASCADE)
-    user = models.ForeignKey(CustomUser, on_delete=models.CASCADE)
-    liked = models.BooleanField(null=True)  # True = like, False = dislike, None = no vote
-
-    class Meta:
-        unique_together = ('review', 'user')
-
-
-class Comment(models.Model):
-    review = models.ForeignKey(Review, on_delete=models.CASCADE)
-    user = models.ForeignKey(CustomUser, on_delete=models.CASCADE)
-    text = models.TextField()
-    created_at = models.DateTimeField(default=timezone.now)
-
-    def __str__(self):
-        return f"Comment by {self.user.username} on {self.review}"
-
-
-class Watchlist(models.Model):
-    user = models.ForeignKey(CustomUser, on_delete=models.CASCADE)
-    movie = models.ForeignKey(Movie, on_delete=models.CASCADE)
-    added_at = models.DateTimeField(auto_now_add=True)
-
-    class Meta:
-        unique_together = ('user', 'movie')
-
-
-class Watched(models.Model):
-    user = models.ForeignKey(CustomUser, on_delete=models.CASCADE)
-    movie = models.ForeignKey(Movie, on_delete=models.CASCADE)
-    watched_at = models.DateTimeField(auto_now_add=True)
-
-    class Meta:
-        unique_together = ('user', 'movie')
+    is_verified = models.BooleanField(default=False)

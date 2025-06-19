@@ -1,12 +1,12 @@
-# user/urls.py
+# movie/urls.py
+from django.urls import path, include
+from rest_framework.routers import DefaultRouter
+from .views import MovieViewSet, ReviewDetail
 
-from django.urls import path
-from .views import RegisterView, LoginView, AddToWatchlist, MarkAsWatched, CreateReview
+router = DefaultRouter()
+router.register(r'movies', MovieViewSet, basename='movie')
 
 urlpatterns = [
-    path('register/', RegisterView.as_view(), name='register'),
-    path('login/', LoginView.as_view(), name='login'),
-    path('watchlist/add/', AddToWatchlist.as_view(), name='add_watchlist'),
-    path('watched/add/', MarkAsWatched.as_view(), name='mark_watched'),
-    path('review/create/', CreateReview.as_view(), name='create_review'),
+    path('', include(router.urls)),
+    path('reviews/<int:pk>/', ReviewDetail.as_view(), name='review-detail'),
 ]
